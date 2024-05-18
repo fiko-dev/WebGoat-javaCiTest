@@ -1,0 +1,88 @@
+include:
+  - template: Security/SAST.gitlab-ci.yml #SAST runs in the "test" stage(?)
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Code-Quality.gitlab-ci.yml
+
+image: maven:latest
+
+stages:
+#  - test
+  - build
+  - security_scan
+#  - code_quality
+  - unit_tests
+
+cache:
+  paths:
+    - .m2/
+
+build_project:
+  stage: build
+  script:
+    - mvn clean install -DskipTests=true
+  only:
+    - master
+    - merge_requests
+    
+#sast_scan:
+#  variables:
+#    FAIL_NEVER: 1
+#  artifacts:
+#  reports:
+#  sast: gl-sast-report.json
+  
+  
+#To run SAST jobs, by default, you need GitLab Runner with the docker or kubernetes executor. If you’re using SaaS runners on GitLab.com, this is enabled by default. 
+#semgrep-sast: #semgrep is the analyzer that supports Java analyzing
+#  stage: test
+#  extends: .sast-analyzer
+#  image:
+#    name: "$SAST_ANALYZER_IMAGE" #what analyzer image? it looks like it just creates an image from GRIR
+#  variables:
+#    SEARCH_MAX_DEPTH: 20
+#    SAST_ANALYZER_IMAGE_TAG: 4
+#    SAST_ANALYZER_IMAGE: "$SECURE_ANALYZERS_PREFIX/semgrep:$SAST_ANALYZER_IMAGE_TAG$SAST_IMAGE_SUFFIX" #important?
+#  rules:
+#    - if: $SAST_DISABLED == 'true' || $SAST_DISABLED == '1'
+#      when: never
+#    - if: $SAST_EXCLUDED_ANALYZERS =~ /semgrep/
+#      when: never
+#    - if: $CI_COMMIT_BRANCH
+#      exists:
+#        - '**/*.java'
+
+#keeping this here for now
+#snyk_scan:
+#  stage: security_scan
+#  image: snyk/snyk-cli:maven
+#  script:
+#    - snyk auth $SNYK_TOKEN
+#    - snyk test --all-projects
+#  only:
+#    - master
+#    - merge_requests
+#  allow_failure: false
+
+owasp_dependency_check:
+  stage: security_scan
+  script:
+    - mvn org.owasp:dependency-check-maven:check
+  only:
+    - master
+    - merge_requests
+  allow_failure: false
+    
+unit_testing:
+  stage: unit_tests
+  script:
+    - mvn verify
+  artifacts:
+    when: always
+    reports:
+    junit:
+      - target/surefire-reports/TEST-*.xml
+  only:
+    - master
+    - merge_requests
+  allow_failure: false
